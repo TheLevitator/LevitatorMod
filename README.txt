@@ -1,5 +1,6 @@
 First stable public
 RELEASE v1.02 12/25/2015
+http://steamcommunity.com/sharedfiles/filedetails/?id=572010326
 
 Levitator Mod is intended as a robust and versatile mod development framework for Space Engineers (Keen Software House). Initially, it comes with one
 module called NHBC, which stands for No Hale Bopp Cult. It prevents players from exploiting sucide as a mode of transportation. When spawning as an
