@@ -3,27 +3,68 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
 VisualStudioVersion = 14.0.23107.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Scripts", "Data\Scripts\Script\Scripts.csproj", "{BC21D0BF-F922-4102-8E99-09E1026B9BE8}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LevitatorModScripts", "LevitatorMod\Data\Scripts\Script\LevitatorModScripts.csproj", "{BC21D0BF-F922-4102-8E99-09E1026B9BE8}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{F08D2AE4-D10A-4AD9-802D-20BBDD530EBF}"
 	ProjectSection(SolutionItems) = preProject
 		LICENSE.txt = LICENSE.txt
-		modinfo.sbmi = modinfo.sbmi
 		README.txt = README.txt
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LevitatorModTerrestrial", "LevitatorModTerrestrial", "{956AADA4-5360-437E-8C3D-B6090C2C87B9}"
+	ProjectSection(SolutionItems) = preProject
+		LevitatorModTerrestrial\modinfo.sbmi = LevitatorModTerrestrial\modinfo.sbmi
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Data", "Data", "{0CDE3181-DD83-465F-B114-69D36440F72D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Prefabs", "Prefabs", "{94AE527E-152C-460D-BB2A-DFE950F29D64}"
+	ProjectSection(SolutionItems) = preProject
+		LevitatorModTerrestrial\Data\Prefabs\RespawnShips.sbc = LevitatorModTerrestrial\Data\Prefabs\RespawnShips.sbc
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Installer", "Installer\Installer.csproj", "{9A4DA678-BD0E-4806-9A09-D32E76AF458B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{BC21D0BF-F922-4102-8E99-09E1026B9BE8} = {BC21D0BF-F922-4102-8E99-09E1026B9BE8}
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SBMI", "SBMI", "{5BA3E54C-A62C-49AB-850D-1E5EFEB6FD2D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Release", "Release", "{992D9496-A4E7-4A8E-A4E2-C4FAB6F46831}"
+	ProjectSection(SolutionItems) = preProject
+		SBMI\Release\LevitatorMod = SBMI\Release\LevitatorMod
+		SBMI\Release\LevitatorModTerrestrial = SBMI\Release\LevitatorModTerrestrial
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Development", "Development", "{3D29515A-C462-4C6B-8CEB-1661F6D78A8E}"
+	ProjectSection(SolutionItems) = preProject
+		SBMI\Development\LevitatorMod = SBMI\Development\LevitatorMod
 	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
-		Debug|Any CPU = Debug|Any CPU
+		Development|Any CPU = Development|Any CPU
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{BC21D0BF-F922-4102-8E99-09E1026B9BE8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{BC21D0BF-F922-4102-8E99-09E1026B9BE8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC21D0BF-F922-4102-8E99-09E1026B9BE8}.Development|Any CPU.ActiveCfg = Development|Any CPU
+		{BC21D0BF-F922-4102-8E99-09E1026B9BE8}.Development|Any CPU.Build.0 = Development|Any CPU
+		{BC21D0BF-F922-4102-8E99-09E1026B9BE8}.Development|Any CPU.Deploy.0 = Development|Any CPU
 		{BC21D0BF-F922-4102-8E99-09E1026B9BE8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{BC21D0BF-F922-4102-8E99-09E1026B9BE8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9A4DA678-BD0E-4806-9A09-D32E76AF458B}.Development|Any CPU.ActiveCfg = Development|Any CPU
+		{9A4DA678-BD0E-4806-9A09-D32E76AF458B}.Development|Any CPU.Build.0 = Development|Any CPU
+		{9A4DA678-BD0E-4806-9A09-D32E76AF458B}.Development|Any CPU.Deploy.0 = Development|Any CPU
+		{9A4DA678-BD0E-4806-9A09-D32E76AF458B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9A4DA678-BD0E-4806-9A09-D32E76AF458B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{0CDE3181-DD83-465F-B114-69D36440F72D} = {956AADA4-5360-437E-8C3D-B6090C2C87B9}
+		{94AE527E-152C-460D-BB2A-DFE950F29D64} = {0CDE3181-DD83-465F-B114-69D36440F72D}
+		{992D9496-A4E7-4A8E-A4E2-C4FAB6F46831} = {5BA3E54C-A62C-49AB-850D-1E5EFEB6FD2D}
+		{3D29515A-C462-4C6B-8CEB-1661F6D78A8E} = {5BA3E54C-A62C-49AB-850D-1E5EFEB6FD2D}
 	EndGlobalSection
 EndGlobal

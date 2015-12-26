@@ -1,5 +1,5 @@
 First stable public
-RELEASE v1.02 12/25/2015
+RELEASE v1.03 12/26/2015
 http://steamcommunity.com/sharedfiles/filedetails/?id=572010326
 
 Levitator Mod is intended as a robust and versatile mod development framework for Space Engineers (Keen Software House). Initially, it comes with one
