@@ -80,7 +80,8 @@
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
-    <PostBuildEvent>$(TargetPath)  $(SolutionDir) $(ConfigurationName)</PostBuildEvent>
+    <PostBuildEvent>move "$(TargetPath)" "$(SolutionDir) " &amp;&amp; "$(DevEnvDir)\DevEnv.exe" "$(SolutionPath) " /Clean &amp;&amp;  "$(SolutionDir)\$(TargetFileName)" "$(SolutionDir) " $(ConfigurationName)
+</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.

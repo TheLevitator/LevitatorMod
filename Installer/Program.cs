@@ -3,6 +3,8 @@
 * This very simple installer is just here to make it easy to swap SBMI files by changing the build Configuration in VS
 * It updates the Space Engineers Mods directory
 *
+* NOTE: To work correctly, this installer must have a dependancy on all installed projects so that it builds and runs after them
+*
 * Levitator
 *
 */
@@ -21,10 +23,10 @@ namespace Installer
 		static int Main(string[] args)
 		{
 			try
-			{
+			{				
 				string SolutionDir = args[0];
 				string Configuration = args[1];
-
+				
 				Directory.SetCurrentDirectory(SolutionDir);
 				List<ModInfo> infos = EnumMods(Configuration);
 
@@ -64,7 +66,7 @@ namespace Installer
 		private static List<ModInfo> EnumMods(string configuration)
 		{
 			var infos = new List<ModInfo>();
-			var paths = Directory.GetFiles( Path.Combine("SBMI", configuration) );
+			var paths = Directory.GetFiles( Path.Combine("SBMI", "Config" + configuration) );
 			string ModSuffix;
 
 			if (configuration == "Release") ModSuffix = "";

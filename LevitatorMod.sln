@@ -30,15 +30,15 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Installer", "Installer\Inst
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SBMI", "SBMI", "{5BA3E54C-A62C-49AB-850D-1E5EFEB6FD2D}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Release", "Release", "{992D9496-A4E7-4A8E-A4E2-C4FAB6F46831}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ConfigRelease", "ConfigRelease", "{992D9496-A4E7-4A8E-A4E2-C4FAB6F46831}"
 	ProjectSection(SolutionItems) = preProject
-		SBMI\Release\LevitatorMod = SBMI\Release\LevitatorMod
-		SBMI\Release\LevitatorModTerrestrial = SBMI\Release\LevitatorModTerrestrial
+		SBMI\ConfigRelease\LevitatorMod = SBMI\ConfigRelease\LevitatorMod
+		SBMI\ConfigRelease\LevitatorModTerrestrial = SBMI\ConfigRelease\LevitatorModTerrestrial
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Development", "Development", "{3D29515A-C462-4C6B-8CEB-1661F6D78A8E}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "ConfigDevelopment", "ConfigDevelopment", "{3D29515A-C462-4C6B-8CEB-1661F6D78A8E}"
 	ProjectSection(SolutionItems) = preProject
-		SBMI\Development\LevitatorMod = SBMI\Development\LevitatorMod
+		SBMI\ConfigDevelopment\LevitatorMod = SBMI\ConfigDevelopment\LevitatorMod
 	EndProjectSection
 EndProject
 Global
