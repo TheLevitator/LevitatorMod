@@ -8,7 +8,7 @@
 *
 * Reuse is free as long as you attribute the author.
 *
-* V1.01
+* V1.03
 *
 */
 
@@ -22,7 +22,7 @@ namespace Levitator.SE.Modding
 {
 	//The attribute is not inheritable, so add it to your subclass
 	//[MySessionComponentDescriptor(MyUpdateOrder.X)]
-	public abstract class ModBase : MySessionComponentBase
+	public abstract class ModBase : MySessionComponentBase, IDisposable
 	{
 		protected bool Initialized;
 		protected bool Fatal;
@@ -72,6 +72,7 @@ namespace Levitator.SE.Modding
 			//Spaces cause problems for some reason. Replace them with underscores. Expand existing underscores to avoid name collisions.
             tmp = tmp.Replace("_", "__");
 			tmp = tmp.Replace(' ', '_');
+			tmp = tmp.Replace(":", "");	//Same thing the game does when naming saves
 			return tmp;
 		}
 
@@ -82,7 +83,8 @@ namespace Levitator.SE.Modding
 		{
 			try
 			{
-				if (null == MyAPIGateway.Session || null == MyAPIGateway.Utilities) return;
+				if (null == MyAPIGateway.Session || null == MyAPIGateway.Utilities || null == MyAPIGateway.Entities) return;
+
 				Log.Init();
 				DeferredTasks = new DeferredTaskQueue(Log);
 				if (!Initialize()) return;
@@ -123,15 +125,14 @@ namespace Levitator.SE.Modding
 			Util.DisposeIfSet(ref mServerComponent);
 			DeferredTasks = null;
 			if (Log != null) Log.Dispose();
-			Initialized = false;
-			
+			Initialized = false;			
 		}
 
 		public void DoPolling()
 		{
 			try
 			{
-				if (!Initialized && !Fatal)
+				if (!(Initialized || Fatal))
 					BaseInitialize();
 
 				if (Initialized)
@@ -186,6 +187,8 @@ namespace Levitator.SE.Modding
 			base.SaveData();
 		}
 
+		public virtual void Dispose(){ UnloadData();}
+
 		protected override void UnloadData()
 		{
 			try
@@ -223,7 +226,7 @@ namespace Levitator.SE.Modding
 		{
 			if (null != MyAPIGateway.Utilities && null != MyAPIGateway.Session && null != MyAPIGateway.Session.Player)				
 					MyAPIGateway.Utilities.ShowNotification(msg, 10000, font);							
-		}
+		}		
 	}
 
 	//Utility functions for mod development

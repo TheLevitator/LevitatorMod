@@ -6,12 +6,11 @@
 * a given entity upon addition and removal, whether the entity is top-level or a block.
 * Haven't yet experimented with floating objects or voxel entities.
 *
-* TODO: I can't remember why I commented out some Singleton<> references.
-* Some of these should probably be enforced as Singletons to catch any cleanup problems
+* TODO: This has seen massive refactoring and needs testing
 *
 * Reuse is free as long as you attribute the author.
 *
-* V1.0
+* V1.03
 *
 */
 
@@ -24,9 +23,35 @@ using VRage.ModAPI;
 
 namespace Levitator.SE.Modding
 {
-	//Hook an event for a specified base class and forward it only if it matches the subclass
-	//A non-singular base class
-	public class EntityBroadcaster<T, B> where T : class
+	static class Events
+	{
+		public static readonly EventProxy<IMyEntity> TopLevelEntityAdded =
+			new EventProxy<IMyEntity>((Action<IMyEntity> handler) => MyAPIGateway.Entities.OnEntityAdd += handler, handler => MyAPIGateway.Entities.OnEntityAdd -= handler);
+
+		public static readonly EventProxy<IMyEntity> TopLevelEntityRemoved =
+			new EventProxy<IMyEntity>(handler => MyAPIGateway.Entities.OnEntityRemove += handler, handler => MyAPIGateway.Entities.OnEntityRemove -= handler);
+
+		public static EventProxy<IMySlimBlock> MakeGridBlockAdded(IMyCubeGrid grid)
+		{
+			return new EventProxy<IMySlimBlock>(handler => grid.OnBlockAdded += handler, handler => grid.OnBlockAdded -= handler);
+		}
+
+		public static EventProxy<IMySlimBlock> MakeGridBlockRemoved(IMyCubeGrid grid)
+		{
+			return new EventProxy<IMySlimBlock>(handler => grid.OnBlockRemoved += handler, handler => grid.OnBlockRemoved -= handler);
+		}
+
+		/*
+		public static EventProxy<IMySlimBlock> MakeGridBlockRemoved(IMyCubeGrid grid)
+		{
+			return new EventProxy<IMySlimBlock>(handler => grid.OnBlockRemoved += handler, handler => grid.OnBlockRemoved -= handler);
+		}
+		*/
+	}
+
+	//A hook an event for a specified base class and forward it only if it matches the subclass
+	//A non-singular base class. Derived class attaches an event source to HandleEvent
+	public abstract class EntityBroadcaster<T, B> where T : class
 		where B : class, IMyEntity
 	{
 		public Event<T> Event = new Event<T>();
@@ -38,18 +63,29 @@ namespace Levitator.SE.Modding
 		public void HandleEvent(IMySlimBlock block) { Util.ForwardIfNotNull(Match(block), Event.Invoke); }
 	}
 
-	public static class TopLevelEntityAddedBroadcaster<T> where T : class
-	{
-		static public readonly EntityBroadcaster<T, IMyEntity> Broadcaster = new EntityBroadcaster<T, IMyEntity>();
-		static TopLevelEntityAddedBroadcaster() { MyAPIGateway.Entities.OnEntityAdd += Broadcaster.HandleEvent; }
+	public class TopLevelEntityAddedBroadcaster<T> : EntityBroadcaster<T, IMyEntity>, ISingleton where T : class
+	{		
+		private TopLevelEntityAddedBroadcaster() {
+			Singleton<TopLevelEntityAddedBroadcaster<T>>.Set(this);
+			Events.TopLevelEntityAdded.Add(HandleEvent);			
+        }
+
+		public static TopLevelEntityAddedBroadcaster<T> New() { return new TopLevelEntityAddedBroadcaster<T>(); }
+
+		public void SingletonDispose(){ Events.TopLevelEntityAdded.Remove(HandleEvent);	}
 	}
 
-	public static class TopLevelEntityRemovedBroadcaster<T> where T : class
+	public class TopLevelEntityRemovedBroadcaster<T> : EntityBroadcaster<T, IMyEntity>, ISingleton where T : class
 	{
-		static public readonly EntityBroadcaster<T, IMyEntity> Broadcaster = new EntityBroadcaster<T, IMyEntity>();
-		static TopLevelEntityRemovedBroadcaster() { MyAPIGateway.Entities.OnEntityAdd += Broadcaster.HandleEvent; }
+		private TopLevelEntityRemovedBroadcaster()
+		{
+			Singleton<TopLevelEntityRemovedBroadcaster<T>>.Set(this);
+			Events.TopLevelEntityRemoved.Add(HandleEvent);
+		}
+		public static TopLevelEntityRemovedBroadcaster<T> New() { return new TopLevelEntityRemovedBroadcaster<T>(); }
+		public void SingletonDispose(){ Events.TopLevelEntityRemoved.Remove(HandleEvent); }
 	}
-	
+
 	public abstract class EntityTracker<T> : IDisposable, IEnumerable<T> where T : class
 	{
 		private readonly HashSet<T> Entities = new HashSet<T>();
@@ -68,9 +104,9 @@ namespace Levitator.SE.Modding
 		}
 
 		public int Count { get { return Entities.Count; } }
-		protected abstract void GetExisting();
-		public abstract Event<T> GetAddEvent();
-		public abstract Event<T> GetRemoveEvent();
+		protected abstract void GetExisting(); //To populate Entities with the set of extant objects through AddEntity
+		public abstract IEvent<T> GetAddEvent();
+		public abstract IEvent<T> GetRemoveEvent();
 
 		protected virtual void AddEntity(T entity){ Entities.Add(entity); }
 		protected virtual void RemoveEntity(T entity) { Entities.Remove(entity); }
@@ -79,22 +115,28 @@ namespace Levitator.SE.Modding
 		IEnumerator IEnumerable.GetEnumerator() { return (this as IEnumerable<T>).GetEnumerator(); }
 	}
 
-	//Track all entities added or removed directly to MyAPIGateway.Entities
-	//Would be static, but static cannot inherit
-	public class TopLevelEntityTracker<T> : EntityTracker<T> where T : class
+	//Track all entities added or removed directly to MyAPIGateway.Entities	
+	public class TopLevelEntityTracker<T> : EntityTracker<T>, ISingleton where T : class
 	{
-		static Singleton<TopLevelEntityTracker<T>> Singleton;
+		private Singleton<TopLevelEntityAddedBroadcaster<T>>.Ref AddBroadcaster = Singleton.Get(TopLevelEntityAddedBroadcaster<T>.New);
+		private Singleton<TopLevelEntityRemovedBroadcaster<T>>.Ref RemoveBroadcaster = Singleton.Get(TopLevelEntityRemovedBroadcaster<T>.New);
 
-		private TopLevelEntityTracker() { Singleton = new Singleton<TopLevelEntityTracker<T>>(this); }
-		public static TopLevelEntityTracker<T> Constructor() { return new TopLevelEntityTracker<T>(); }
+		private TopLevelEntityTracker() { Singleton<TopLevelEntityTracker<T>>.Set(this); }
+		public static TopLevelEntityTracker<T> New() { return new TopLevelEntityTracker<T>(); }
+		public void SingletonDispose()
+		{
+			AddBroadcaster.Dispose();
+			RemoveBroadcaster.Dispose();			
+			base.Dispose();
+		}
 
-		public override Event<T> GetAddEvent() { return TopLevelEntityAddedBroadcaster<T>.Broadcaster.Event; }
-		public override Event<T> GetRemoveEvent() { return TopLevelEntityRemovedBroadcaster<T>.Broadcaster.Event; }
+		public override IEvent<T> GetAddEvent() { return AddBroadcaster.Instance.Event; }
+		public override IEvent<T> GetRemoveEvent() { return RemoveBroadcaster.Instance.Event; }
 		protected override void GetExisting() { MyAPIGateway.Entities.GetEntities(null, AddEntityPredicate); }
 
 		private bool AddEntityPredicate(IMyEntity entity)
 		{
-			Util.ForwardIfNotNull(TopLevelEntityAddedBroadcaster<T>.Broadcaster.Match(entity), AddEntity);			
+			Util.ForwardIfNotNull(AddBroadcaster.Instance.Match(entity), AddEntity);			
 			return false;
 		}
 	}
@@ -102,7 +144,7 @@ namespace Levitator.SE.Modding
 	//Receive reliable notifications
 	//public class EntityTrackerSink<T, TrackerT> : IDisposable where T : class, IMyEntity where TrackerT : EntityTracker<T>
 	public class EntityTrackerSink<T> : IDisposable where T : class
-	{
+	{		
 		private Action<T> AddAction = null;
 		private Action<T> RemoveAction = null;
 		public readonly EntityTracker<T> Tracker = null;
@@ -132,42 +174,69 @@ namespace Levitator.SE.Modding
 		}
 	}
 
+	public abstract class GlobalBlockBroadcasterBase<T> : EntityBroadcaster<T, IMyEntity>, IDisposable where T : class
+	{
+		protected EntityTrackerSink<IMyCubeGrid> Grids;
+		private Singleton<TopLevelEntityTracker<IMyCubeGrid>>.Ref Tracker = Singleton.Get<TopLevelEntityTracker<IMyCubeGrid>>(TopLevelEntityTracker<IMyCubeGrid>.New);
+				
+		protected GlobalBlockBroadcasterBase(){	 Grids = new EntityTrackerSink<IMyCubeGrid>(Tracker.Instance, AttachGrid, DetachGrid);}
+		public virtual void Dispose(){
+			Util.ForEach(Tracker.Instance, DetachGrid);
+			Tracker.Dispose();
+		}
+
+		protected abstract IEvent<IMySlimBlock> GetSourceEvent(IMyCubeGrid grid);
+		private void AttachGrid(IMyCubeGrid grid) { GetSourceEvent(grid).Add(HandleEvent); }
+		private void DetachGrid(IMyCubeGrid grid) { GetSourceEvent(grid).Remove(HandleEvent); }
+	}
+
 	//Listen to the entire session for cube blocks. This is better than GameLogicComponent if you don't want to waste cycles on needless update calls
-	public static class GlobalBlockAddedBroadcaster<T> where T : class
-	{
-		static public readonly EntityBroadcaster<T, IMyEntity> Broadcaster = new EntityBroadcaster<T, IMyEntity>();
-		static private EntityTrackerSink<IMyCubeGrid> Grids = new EntityTrackerSink<IMyCubeGrid>(
-			Singleton.Get<TopLevelEntityTracker<IMyCubeGrid>>(TopLevelEntityTracker<IMyCubeGrid>.Constructor), OnGridAdded, OnGridRemoved);
-		static private void OnGridAdded(IMyCubeGrid grid) { grid.OnBlockAdded += Broadcaster.HandleEvent; }
-		static private void OnGridRemoved(IMyCubeGrid grid) { grid.OnBlockAdded -= Broadcaster.HandleEvent; }		
+	public class GlobalBlockAddedBroadcaster<T> : GlobalBlockBroadcasterBase<T>, ISingleton where T : class
+	{		
+		private GlobalBlockAddedBroadcaster(){ Singleton<GlobalBlockAddedBroadcaster<T>>.Set(this);}
+		public static GlobalBlockAddedBroadcaster<T> New() { return new GlobalBlockAddedBroadcaster<T>(); }
+		public void SingletonDispose(){ base.Dispose(); }
+
+		protected override IEvent<IMySlimBlock> GetSourceEvent(IMyCubeGrid grid){ return  Events.MakeGridBlockAdded(grid); }
 	}
 
-	public static class GlobalBlockRemovedBroadcaster<T> where T : class
+	public class GlobalBlockRemovedBroadcaster<T> : GlobalBlockBroadcasterBase<T>, ISingleton where T : class
 	{
-		static public readonly EntityBroadcaster<T, IMyEntity> Broadcaster = new EntityBroadcaster<T, IMyEntity>();
-		static private EntityTrackerSink<IMyCubeGrid> Grids = new EntityTrackerSink<IMyCubeGrid>(
-			Singleton.Get<TopLevelEntityTracker<IMyCubeGrid>>(TopLevelEntityTracker<IMyCubeGrid>.Constructor), OnGridAdded, OnGridRemoved);
-		static private void OnGridAdded(IMyCubeGrid grid) { grid.OnBlockRemoved += Broadcaster.HandleEvent; }
-		static private void OnGridRemoved(IMyCubeGrid grid) { grid.OnBlockRemoved -= Broadcaster.HandleEvent; }		
+		private GlobalBlockRemovedBroadcaster() { Singleton<GlobalBlockRemovedBroadcaster<T>>.Set(this); }
+		public static GlobalBlockRemovedBroadcaster<T> New() { return new GlobalBlockRemovedBroadcaster<T>(); }
+
+		public void SingletonDispose(){ base.Dispose();	}
+
+		protected override IEvent<IMySlimBlock> GetSourceEvent(IMyCubeGrid grid) { return Events.MakeGridBlockRemoved(grid); }
 	}
 
-	public class GlobalBlockTracker<T> : EntityTracker<T> where T : class
+	public class GlobalBlockTracker<T> : EntityTracker<T>, ISingleton where T : class
 	{
-		private Singleton<GlobalBlockTracker<T>> Instance;
-		public static GlobalBlockTracker<T> Constructor() { return new GlobalBlockTracker<T>(); }
-		public GlobalBlockTracker() { Instance = new Singleton<GlobalBlockTracker<T>>(this); }
-		public override Event<T> GetAddEvent() { return GlobalBlockAddedBroadcaster<T>.Broadcaster.Event; }
-		public override Event<T> GetRemoveEvent() { return GlobalBlockRemovedBroadcaster<T>.Broadcaster.Event; }
+		private Singleton<GlobalBlockAddedBroadcaster<T>>.Ref AddedBroadcaster = Singleton.Get(GlobalBlockAddedBroadcaster<T>.New);
+		private Singleton<GlobalBlockRemovedBroadcaster<T>>.Ref RemovedBroadcaster = Singleton.Get(GlobalBlockRemovedBroadcaster<T>.New);
+		private Singleton<TopLevelEntityTracker<IMyCubeGrid>>.Ref AllGrids = Singleton.Get(TopLevelEntityTracker<IMyCubeGrid>.New);
 
+		public GlobalBlockTracker() { Singleton<GlobalBlockTracker<T>>.Set(this); }
+		public static GlobalBlockTracker<T> New() { return new GlobalBlockTracker<T>(); }
+		public void SingletonDispose() {			
+			AllGrids.Dispose();
+			RemovedBroadcaster.Dispose();
+			AddedBroadcaster.Dispose();
+			base.Dispose();			
+		}
+
+		public override IEvent<T> GetAddEvent() { return AddedBroadcaster.Instance.Event; }
+		public override IEvent<T> GetRemoveEvent() { return RemovedBroadcaster.Instance.Event; }
+		
 		protected override void GetExisting()
 		{
 			//foreach (var grid in Singleton.Get<TopLevelEntityTracker<IMyCubeGrid>>(TopLevelEntityTracker<IMyCubeGrid>.Constructor)){ grid.GetBlocks(null, BlockPredicate);}
-			Util.ForEach(Singleton.Get(TopLevelEntityTracker<IMyCubeGrid>.Constructor), grid => grid.GetBlocks(null, BlockPredicate));
+			Util.ForEach(AllGrids.Instance, grid => grid.GetBlocks(null, BlockPredicate));
 		}
 
 		private bool BlockPredicate(IMySlimBlock block)
 		{
-			Util.ForwardIfNotNull(GlobalBlockAddedBroadcaster<T>.Broadcaster.Match(block), AddEntity);
+			Util.ForwardIfNotNull(AddedBroadcaster.Instance.Match(block), AddEntity);
 			return false;
 		}
 	}

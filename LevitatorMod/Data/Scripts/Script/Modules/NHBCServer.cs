@@ -5,7 +5,7 @@
 * Module which forces players to spawn only at their home Medical Bay
 * Because this is a game about space travel, not a UFO suicide cult
 *
-* V1.00
+* V1.03
 *
 */
 
@@ -54,7 +54,8 @@ namespace Levitator.SE.LevitatorMod.Modules
 		public static readonly string CharacterError = "You must be on foot to set your spawn";
 		
 		bool DataFileValid;
-		HomeDictionary HomeData;		
+		HomeDictionary HomeData;
+		Singleton<TopLevelEntityTracker<IMyCharacter>>.Ref CharacterTracker;	
 		EntityTrackerSink<IMyCharacter> Characters;
 		List<IMyCharacter> RespawnQueue = new List<IMyCharacter>((int)MyAPIGateway.Players.Count * 2);
 		List<IMyCharacter> NewRespawnQueue = new List<IMyCharacter>((int)MyAPIGateway.Players.Count * 2);
@@ -73,14 +74,16 @@ namespace Levitator.SE.LevitatorMod.Modules
 
 		public NHBCServer(ModComponent mc) : base(mc)
 		{			
-			Log.Log("NHBC Module Created", false);			
-			Characters = new EntityTrackerSink<IMyCharacter>(Singleton.Get<TopLevelEntityTracker<IMyCharacter>>(TopLevelEntityTracker<IMyCharacter>.Constructor), OnCharacterAdded, null);
+			Log.Log("NHBC Module Created", false);
+			CharacterTracker = Singleton.Get<TopLevelEntityTracker<IMyCharacter>>(TopLevelEntityTracker<IMyCharacter>.New);
+            Characters = new EntityTrackerSink<IMyCharacter>(CharacterTracker.Instance, OnCharacterAdded, null);
 			mc.RegisterForUpdates(this);
         }
 
 		public override void Dispose()
 		{
-			Util.DisposeIfSet(ref Characters);			
+			Util.DisposeIfSet(ref Characters);
+			Util.DisposeIfSet(ref CharacterTracker);	
 			if (null != HomeData)
 			{
 				HomeData.Clear();

@@ -6,7 +6,7 @@
 *
 * Reuse is free as long as you attribute the author.
 *
-* V1.0
+* V1.03
 *
 */
 
@@ -360,76 +360,63 @@ namespace Levitator.SE.Utility
 		//public static implicit operator StringPos(string s) { return new StringPos(s, 0); }
 	}
 
-	public static class Singleton
+	//To avoid confusion with things that can be Dispose()ed any time
+	//These things are disposed by Singleton<>
+	public interface ISingleton
 	{
-		public static T Get<T>(Func<T> constructor) where T : class{
-			if (null != Singleton<T>.Instance)
-				return Singleton<T>.Instance;
-			else
-				return constructor();
-			//return Singleton<T>.Instance ?? (Singleton<T>.Instance = constructor());
-		}
-		public static void SetNew<T>(T me) where T : class { Singleton<T>.Instance = me; }
+		void SingletonDispose();
 	}
 
-	public class Singleton<T> : IDisposable where T : class
+	//This is kind of horrible but it's because we don't have WeakReference
+	//Singleton rules. 
+	//1) Call Set() on construction
+	//2) Store a Ref at the point of use and Dispose it when done	
+	public static class Singleton<T> where T : class, ISingleton
 	{
-		private static T mInstance=null;
-		public static T Instance {
-			get { return mInstance; }
-			set{
-				if (null != mInstance && null != value && !ReferenceEquals(mInstance, value))
-					throw new Exception("Duplicate instance");
-				else
-					mInstance = value;
+		private static SingletonState State = new SingletonState();
+		
+		public static void Set(T me) {
+			if (null != State.Instance) throw new Exception("Duplicate singleton");
+			State.Instance = me;
+		}
+				
+		public static void Dispose()
+		{
+			if (null != State.Instance)
+			{
+				State.Instance.SingletonDispose();
+				State.UseCount = 0;
+				State = new SingletonState();
 			}
 		}
-
-		//Would be protected if we had multiple inheritance, but since we don't,
-		//we need to be able to implement this through composition instead
-		public Singleton(T me){ Instance = me; }
-
-		/*		
-		public static void HandleNew(T me) {
-			if (null != Single) throw new Exception("Duplicate instance");
-			else Single = me;
+		
+		private class SingletonState
+		{
+			public T Instance;
+			public int UseCount = 0;
 		}
-		*/
 
-		public virtual void Dispose() { Instance = null; }
+		public class Ref : IDisposable {
+			private SingletonState State;
+
+			public Ref(Func<T> constructor){
+				State = Singleton<T>.State;
+				++State.UseCount;
+				if (null == State.Instance) State.Instance = constructor();
+			}
+
+			public void Dispose() {
+				--State.UseCount;
+				if (State.UseCount <= 0) Singleton<T>.Dispose();
+            }
+			
+			public T Instance { get { return State.Instance; } }
+		}
 	}
 
-	//Reimplementation of a C#-style multicast event because the SE script environment will throw exceptions
-	//for System.Threading.Interlocked in the add() handlers of native events 12/13/2015
-	public class Event<T> : IDisposable
-	{
-		public List<Action<T>> Queue = new List<Action<T>>();
-
-		public void Add(Action<T> action) { Queue.Add(action); }
-		public void Remove(Action<T> action) { Queue.Remove(action); }
-
-		public static Event<T> operator +(Event<T> evt, Action<T> action)
-		{
-			evt.Add(action);
-			return evt;
-		}
-
-		public static Event<T> operator -(Event<T> evt, Action<T> action)
-		{
-			evt.Remove(action);
-			return evt;
-		}
-
-		public void Invoke(T param) {
-			//foreach (var action in Queue) { action(param); }
-			Util.ForEach(Queue, action => action(param));
-		}		
-
-		public void Dispose()
-		{
-			Queue.Clear();
-			Queue = null;
-		}
+	public static class Singleton
+	{				
+		public static Singleton<T>.Ref Get<T>(Func<T> constructor) where T : class, ISingleton { return new Singleton<T>.Ref(constructor); }
 	}
 
 	[System.Serializable]
@@ -513,5 +500,100 @@ namespace Levitator.SE.Utility
 	public static class Reference
 	{
 		public static Reference<T> Create<T>(T value) { return new Reference<T>(value); }
-	}	
+	}
+
+	//Attempt to abstract away the difficulty in referencing events as first-class objects
+	public interface IEvent<T>
+	{
+		void Add(Action<T> handler);
+		void Remove(Action<T> handler);
+	}
+
+	//Reimplementation of a C#-style multicast event because the SE script environment will throw exceptions
+	//for System.Threading.Interlocked in the add() handlers of native events 12/13/2015
+	public class Event<T> : IEvent<T>
+	{
+		public List<Action<T>> Queue = new List<Action<T>>();
+
+		public void Add(Action<T> action) { Queue.Add(action); }
+		public void Remove(Action<T> action) { Queue.Remove(action); }
+
+		public static Event<T> operator +(Event<T> evt, Action<T> action)
+		{
+			evt.Add(action);
+			return evt;
+		}
+
+		public static Event<T> operator -(Event<T> evt, Action<T> action)
+		{
+			evt.Remove(action);
+			return evt;
+		}
+
+		public void Invoke(T param)
+		{
+			//foreach (var action in Queue) { action(param); }
+			Util.ForEach(Queue, action => action(param));
+		}
+	}
+
+	public struct EventProxy<T> : IEvent<T>
+	{
+		Action<Action<T>> AddMethod, RemoveMethod;
+
+		public EventProxy(Action<Action<T>> addMethod, Action<Action<T>> removeMethod)
+		{
+			AddMethod = addMethod;
+			RemoveMethod = removeMethod;
+		}
+
+		public void Add(Action<T> handler) { AddMethod(handler); }
+		public void Remove(Action<T> handler) { RemoveMethod(handler); }
+	}
+
+	//Maybe someday WeakReference will get whitelisted
+	/*
+	public class WeakReference<T> : WeakReference
+	{
+		public WeakReference() : base(null) { }
+		public WeakReference(T v) : base(v){}
+
+		public new T Target
+		{
+			get { return (T)base.Target; }
+			set { base.Target = value; }
+		}
+	}
+
+	//A weak-referenecd event handler which forwards an event so long as its target exists
+	//and detaches itself otherwise
+	public struct WeakEventHandler<T>
+	{
+		IEvent<T> Event;
+		private WeakReference<Action<T>> Target;
+		
+
+		public WeakEventHandler(IEvent<T> evt, Action<T> action)
+		{
+			Event = evt;
+			Target = new WeakReference<Action<T>>(action);
+			Event.Add(action);
+		}
+
+		private void Handler(T v)
+		{
+			var action = Target.Target;
+			if (null != action)
+				action(v);
+			else
+				Event.Remove(Handler);
+		}
+	}
+
+	public static class WeakEventHandler
+	{
+		//public static WeakEventHandler<T> Create<T>(Action<T> target, Action<Action<T>> detach) { return new WeakEventHandler<T>(target, detach); }
+		public static WeakEventHandler<T> Create<T>(IEvent<T> evt, Action<T> handler){ return new WeakEventHandler<T>(evt, handler); }
+	}
+	*/
 }

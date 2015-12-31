@@ -13,18 +13,19 @@
 using Sandbox.Common;
 using Levitator.SE.Modding;
 using Levitator.SE.Utility;
+using System;
 
 namespace Levitator.SE.LevitatorMod
 {
 	[MySessionComponentDescriptor(MyUpdateOrder.BeforeSimulation)]
-	public class LevitatorMod : ModBase {
-
-		Singleton<LevitatorMod> Singleton;
+	public class LevitatorMod : ModBase, ISingleton {
+		
+		//Config
 		public const string Name = "LevitatorMod";
-		public const string Version = "1.0.2";
+		public const string Version = "1.0.3";
 		public override ushort MessageId{ get { return 0xBEEF; } }
-
 		private static ModLog mLog = new ModLog("log.txt", typeof(LevitatorMod), Name);
+
 		public override ModLog Log
 		{
 			get { return mLog; }
@@ -39,14 +40,16 @@ namespace Levitator.SE.LevitatorMod
 
 			try
 			{
-				Singleton = new Singleton<LevitatorMod>(this);
+				Singleton<LevitatorMod>.Set(this);
 			}
-			catch (System.Exception x)
+			catch (Exception x)
 			{
 				Log.Log("Duplicate mod instance!", x);
 				Fatal = true;				
 			}
 		}
+
+		public void SingletonDispose(){ base.Dispose(); }
 
 		protected override bool Initialize()
 		{
