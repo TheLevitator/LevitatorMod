@@ -68,7 +68,7 @@ namespace Levitator.SE.LevitatorMod.Modules
 		//A consistent way of checking whether a spawn is valid, which we can use to select a spawn on the client,
 		//validate it on the server, and (then validate again at the moment of respawn where bounds are null and ignored).
 		public static bool IsHomeValid(IMyPlayer player, BoundingSphereD? bb, IMyMedicalRoom room) {
-			return null != room && (!bb.HasValue || bb.Value.Contains(room.GetPosition()) != ContainmentType.Disjoint) 
+			return null != player.Controller && null != player.Controller.ControlledEntity &&  null != room && (!bb.HasValue || bb.Value.Contains(room.GetPosition()) != ContainmentType.Disjoint) 
 				&& room.HasPlayerAccess(player.PlayerID) && room.IsWorking;
 		}
 
@@ -103,9 +103,11 @@ namespace Levitator.SE.LevitatorMod.Modules
 				"find a Medical Room and type '/home'");
 			
 			//To the void with you
+			/*
 			MoveEntityCommand.MoveEntity(Component.Mod.ServerComponent, character as IMyEntity,
 				new MyPositionAndOrientation(new Vector3(float.MaxValue / 2, float.MaxValue / 2, float.MaxValue / 2),
 				Matrix.Identity.Forward, Matrix.Identity.Up).GetMatrix());
+			*/
 			
 			character.Kill();
 		}
@@ -113,6 +115,13 @@ namespace Levitator.SE.LevitatorMod.Modules
 		//...except for when we are nice
 		private void HandleGrace(IMyPlayer player, PlayerData data)
 		{
+			if (null == player) Log.Log("PLAYER NULL");
+			if (null == data) Log.Log("DATA NULL");
+			if (null == Component) Log.Log("COMPONENT NULL");
+			if (null == Component.Mod) Log.Log("MOD NULL");
+			if (null == Component.Mod.ServerComponent) Log.Log("SERVER NULL");
+			if (null == Component.Mod.ServerComponent.EndPoint) Log.Log("ENDPOINT NULL");
+
 			MissionScreenCommand.Show(Component.Mod.ServerComponent.EndPoint[player], "This is not a UFO suicide cult",
 					"From now on, whenever you spawn on foot you will always start at your home Medical Room unless you choose a spawn ship instead. " +
 					"This is to prevent people from hitchhiking across the galaxy by suiciding. You must travel to a Medical Room and type '/home' in chat to set your home spawn.\n\n" +
@@ -215,10 +224,11 @@ namespace Levitator.SE.LevitatorMod.Modules
 
 		public override void LoadData()
 		{
-			Log.Log(HomeDataPath + " loading", false);
+			var qualifiedPath = ModBase.QualifyFilename(HomeDataPath);
+			Log.Log(qualifiedPath + " loading", false);
 			HomeData = null;
 			DataFileValid = true;
-			if (MyAPIGateway.Utilities.FileExistsInLocalStorage(ModBase.QualifyFilename(HomeDataPath), GetType()))
+			if (MyAPIGateway.Utilities.FileExistsInLocalStorage(qualifiedPath, GetType()))
 			{
 				try
 				{
