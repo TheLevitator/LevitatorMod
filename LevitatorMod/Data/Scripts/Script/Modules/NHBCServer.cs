@@ -23,6 +23,8 @@ using Levitator.SE.Utility;
 using Levitator.SE.Serialization;
 using Levitator.SE.Network;
 using Scripts.Modding.Modules.CommonClient;
+using Sandbox.Common.ObjectBuilders.Definitions;
+using Sandbox.Common.ObjectBuilders;
 
 namespace Levitator.SE.LevitatorMod.Modules
 {
@@ -41,7 +43,7 @@ namespace Levitator.SE.LevitatorMod.Modules
 			ser.Write(Home);
 		}
 	}
-	
+
 	public class NHBCServer : ModModule
 	{
 		//Hard config
@@ -55,19 +57,21 @@ namespace Levitator.SE.LevitatorMod.Modules
 		
 		bool DataFileValid;
 		HomeDictionary HomeData;
-		Singleton<TopLevelEntityTracker<IMyCharacter>>.Ref CharacterTracker;	
+		Singleton<TopLevelEntityTracker<IMyCharacter>>.Ref CharacterTracker;
 		EntityTrackerSink<IMyCharacter> Characters;
+			
 		List<IMyCharacter> RespawnQueue = new List<IMyCharacter>((int)MyAPIGateway.Players.Count * 2);
 		List<IMyCharacter> NewRespawnQueue = new List<IMyCharacter>((int)MyAPIGateway.Players.Count * 2);
 		readonly List<IMyPlayer> DeadList = new List<IMyPlayer>((int)MyAPIGateway.Players.Count * 2);
-
+		readonly HashSet<IMyCharacter> Carcasses = new HashSet<IMyCharacter>();
+		
 		public static BoundingSphereD GetPlayerHomeBounds(IMyPlayer player){
 			return new BoundingSphereD(player.GetPosition(), HomeRange);
 		}
 
 		//A consistent way of checking whether a spawn is valid, which we can use to select a spawn on the client,
 		//validate it on the server, and (then validate again at the moment of respawn where bounds are null and ignored).
-		public static bool IsHomeValid(IMyPlayer player, BoundingSphereD? bb, IMyMedicalRoom room) {
+		public static bool IsHomeValid(IMyPlayer player, BoundingSphereD? bb, IMyMedicalRoom room) {			
 			return null != player.Controller && null != player.Controller.ControlledEntity &&  null != room && (!bb.HasValue || bb.Value.Contains(room.GetPosition()) != ContainmentType.Disjoint) 
 				&& room.HasPlayerAccess(player.PlayerID) && room.IsWorking;
 		}
@@ -75,23 +79,25 @@ namespace Levitator.SE.LevitatorMod.Modules
 		public NHBCServer(ModComponent mc) : base(mc)
 		{			
 			Log.Log("NHBC Module Created", false);
+
 			CharacterTracker = Singleton.Get<TopLevelEntityTracker<IMyCharacter>>(TopLevelEntityTracker<IMyCharacter>.New);
-            Characters = new EntityTrackerSink<IMyCharacter>(CharacterTracker.Instance, OnCharacterAdded, null);
+            Characters = new EntityTrackerSink<IMyCharacter>(CharacterTracker.Instance, OnCharacterAdded, OnCharacterRemoved);
+			
 			mc.RegisterForUpdates(this);
         }
 
 		public override void Dispose()
-		{
+		{						
 			Util.DisposeIfSet(ref Characters);
-			Util.DisposeIfSet(ref CharacterTracker);	
+			Util.DisposeIfSet(ref CharacterTracker);			
 			if (null != HomeData)
 			{
 				HomeData.Clear();
 				HomeData = null;
 			}
 			base.Dispose();
-		}		
-
+		}
+		
 		//Dead characters being removed have no controlling player
 		//private void OnCharacterRemoved(IMyCharacter obj){}
 	
@@ -101,11 +107,12 @@ namespace Levitator.SE.LevitatorMod.Modules
 			MissionScreenCommand.Show(Component.Mod.ServerComponent.EndPoint[player], "This is not a UFO suicide cult", detail + "\n" +
 				"You may travel to a friendly, active medical room and select it as your home by typing '/home' in chat.", "Objective: ",
 				"find a Medical Room and type '/home'");
-			
+
+			//This used to work, but it started messing up the external camera and setting its position permanently outside the world
 			//To the void with you
-			/*
+			/*			
 			MoveEntityCommand.MoveEntity(Component.Mod.ServerComponent, character as IMyEntity,
-				new MyPositionAndOrientation(new Vector3(float.MaxValue / 2, float.MaxValue / 2, float.MaxValue / 2),
+				new MyPositionAndOrientation(new Vector3(float.MaxValue / 4, float.MaxValue / 4, float.MaxValue / 4),
 				Matrix.Identity.Forward, Matrix.Identity.Up).GetMatrix());
 			*/
 			
@@ -137,7 +144,7 @@ namespace Levitator.SE.LevitatorMod.Modules
 
 			if (null != player && DeadList.Contains(player))
 			{
-				DeadList.Remove(player);
+				DeadList.Remove(player);				
 				var pd = HomeData[player];
 
 				if (null != pd.MedicalRoom.Ref)
@@ -199,11 +206,44 @@ namespace Levitator.SE.LevitatorMod.Modules
 			return null != player.Client && null != player.Controller && null == player.Controller.ControlledEntity;
 		}
 
+		//This is how we detect when corpses are attempting to set home. DENIED.
+		class CarcassHandler {
+			private IMyCharacter Character;
+			private HashSet<IMyCharacter> Carcasses;
+			public CarcassHandler(IMyCharacter character, HashSet<IMyCharacter> carcasses)
+			{
+				Character = character;
+				Carcasses = carcasses;
+				Character.OnMovementStateChanged += Handler;
+				(Character as IMyEntity).OnClose += OnClose;
+			}
+
+			private void OnClose(IMyEntity ent)
+			{
+				Carcasses.Remove(Character);
+				Character.OnMovementStateChanged -= Handler;
+				ent.OnClose -= OnClose;
+			}
+
+			private void Handler(MyCharacterMovementEnum oldstate, MyCharacterMovementEnum newstate)
+			{
+				if (newstate == MyCharacterMovementEnum.Died)
+					Carcasses.Add(Character);
+				else
+				{
+					if(oldstate == MyCharacterMovementEnum.Died)
+						Carcasses.Remove(Character); //In case the game ever adds space zombies
+				}
+			}
+		}
+
 		//Live characters resuming a non-dedicated session have a controlling player
 		//Live character exiting cockpits have a controlling player
 		//Dead players respawning do not
+		//Beware that dead characters whose player is still attached to the external camera still have a controlling player for a short time until they reach the spawn screen
 		private void OnCharacterAdded(IMyCharacter character)
-		{			
+		{
+			new CarcassHandler(character, Carcasses);	
 			if (null == MyAPIGateway.Players.GetPlayerControllingEntity(character as IMyEntity))
 			{
 				//We have to enumerate all the dead here so that when this soulless charcter receives its controller
@@ -213,6 +253,8 @@ namespace Levitator.SE.LevitatorMod.Modules
                 RespawnQueue.Add(character);				
 			}
 		}
+
+		private void OnCharacterRemoved(IMyCharacter character){ Carcasses.Remove(character); }
 
 		public override CommandRegistry GetCommands()
 		{
@@ -297,14 +339,21 @@ namespace Levitator.SE.LevitatorMod.Modules
 			var character = Util.PlayerCharacter(player);
 			var msg = new SetHomeMessage(parser);
 			var home = msg.Home.Ref as IMyMedicalRoom;
-			
-			if(null == Util.PlayerCharacter(player))
+					
+			if(null == character)
 			{
 				NotificationCommand.Notice(conn, CharacterError);
 				return;
 			}
 
-			if(!IsHomeValid(player, GetPlayerHomeBounds(player), home))
+			//Wiseguys
+			if (Carcasses.Contains(character))
+			{
+				NotificationCommand.Notice(conn, "No.");
+				return;
+			}
+
+			if (!IsHomeValid(player, GetPlayerHomeBounds(player), home))
 			{
 				NotificationCommand.Notice(conn, RangeError);
 				return;

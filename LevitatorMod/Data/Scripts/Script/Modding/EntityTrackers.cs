@@ -186,18 +186,39 @@ namespace Levitator.SE.Modding
 		}
 
 		protected abstract IEvent<IMySlimBlock> GetSourceEvent(IMyCubeGrid grid);
-		private void AttachGrid(IMyCubeGrid grid) { GetSourceEvent(grid).Add(HandleEvent); }
-		private void DetachGrid(IMyCubeGrid grid) { GetSourceEvent(grid).Remove(HandleEvent); }
+		protected virtual void AttachGrid(IMyCubeGrid grid) { GetSourceEvent(grid).Add(HandleEvent); }
+		protected virtual void DetachGrid(IMyCubeGrid grid) { GetSourceEvent(grid).Remove(HandleEvent); }
 	}
 
 	//Listen to the entire session for cube blocks. This is better than GameLogicComponent if you don't want to waste cycles on needless update calls
-	public class GlobalBlockAddedBroadcaster<T> : GlobalBlockBroadcasterBase<T>, ISingleton where T : class
+	//This only catches blocks which are APPENDED to an existing grid. This does not see blocks which spawn included with a grid.
+	//This is useful if you want to trap welding operations, but not prefabs like NPC spawns and spawn ships
+	//TODO: Find out if the same distinction is necessary for block removal
+	public class GlobalBlockAppendedBroadcaster<T> : GlobalBlockBroadcasterBase<T>, ISingleton where T : class
 	{		
-		private GlobalBlockAddedBroadcaster(){ Singleton<GlobalBlockAddedBroadcaster<T>>.Set(this);}
-		public static GlobalBlockAddedBroadcaster<T> New() { return new GlobalBlockAddedBroadcaster<T>(); }
+		private GlobalBlockAppendedBroadcaster(){ Singleton<GlobalBlockAppendedBroadcaster<T>>.Set(this);}
+		public static GlobalBlockAppendedBroadcaster<T> New() { return new GlobalBlockAppendedBroadcaster<T>(); }
 		public void SingletonDispose(){ base.Dispose(); }
 
 		protected override IEvent<IMySlimBlock> GetSourceEvent(IMyCubeGrid grid){ return  Events.MakeGridBlockAdded(grid); }
+	}
+
+	//Listen for ALL blocks, including those which spawn as part of a grid
+	public class GlobalBlockAddedBroadcaster<T> : GlobalBlockBroadcasterBase<T>, ISingleton where T : class
+	{
+		private GlobalBlockAddedBroadcaster() { Singleton<GlobalBlockAddedBroadcaster<T>>.Set(this); }
+		public static GlobalBlockAddedBroadcaster<T> New() { return new GlobalBlockAddedBroadcaster<T>(); }
+		public void SingletonDispose() { base.Dispose(); }
+
+		protected override IEvent<IMySlimBlock> GetSourceEvent(IMyCubeGrid grid) { return Events.MakeGridBlockAdded(grid); }
+		protected override void AttachGrid(IMyCubeGrid grid)
+		{
+			base.AttachGrid(grid);
+			grid.GetBlocks(null, block => {
+				HandleEvent(block);
+				return false;
+			});
+		}		
 	}
 
 	public class GlobalBlockRemovedBroadcaster<T> : GlobalBlockBroadcasterBase<T>, ISingleton where T : class
