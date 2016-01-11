@@ -16,6 +16,8 @@ using System;
 using System.Text;
 using Sandbox.ModAPI;
 using Levitator.SE.Utility;
+using Levitator.SE.Serialization;
+using Levitator.SE.Modding.Modules.CommonLocal;
 
 namespace Levitator.SE.Modding
 {
@@ -24,8 +26,24 @@ namespace Levitator.SE.Modding
 		//Leading character we look for to decide if something might be a command
 		public const char Prefix = '/';
 
-		public LocalInputComponent(ModBase mod) : base(mod) { MyAPIGateway.Utilities.MessageEntered += HandleChatInput; }
+		public LocalInputComponent(ModBase mod) : base(mod) {
+			RegisterModule(CommonLocal.Name, CommonLocal.New);
+			LoadModule(CommonLocal.Name); //Always needed to bootstrap
+			MyAPIGateway.Utilities.MessageEntered += HandleChatInput;
+		}
 		public override void Dispose() { MyAPIGateway.Utilities.MessageEntered -= HandleChatInput; }
+
+		public override ModModule LoadModule(string name)
+		{
+			Mod.Log.Log(string.Format("Loading local input module '{0}'", name));
+			return base.LoadModule(name);
+		}
+
+		public override void UnloadModule(string name)
+		{
+			Mod.Log.Log(string.Format("Unloading local input module '{0}'", name));
+			base.UnloadModule(name);
+		}
 
 		private StringBuilder ChatSB = new StringBuilder(128);
 		private void HandleChatInput(string msg, ref bool send)
@@ -42,8 +60,15 @@ namespace Levitator.SE.Modding
 
 				string parsable = ChatSB.ToString();
 				string name;
-				if (DispatchCommand(null, new StringPos(parsable), out name))
-					send = false;
+
+				try
+				{
+					if (DispatchCommand(null, new StringPos(parsable), out name))
+						send = false;
+				}
+				catch (ParseException pe) {
+					ModBase.ShowNotification("Syntax error: " + pe.Message);										
+				}
 			}
 			catch (Exception x)
 			{

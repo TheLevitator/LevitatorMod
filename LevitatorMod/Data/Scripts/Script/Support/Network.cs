@@ -16,9 +16,11 @@
 using Levitator.SE.Modding;
 using Levitator.SE.Serialization;
 using Levitator.SE.Utility;
+using Sandbox.Common.ObjectBuilders;
 using Sandbox.ModAPI;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using VRage.ModAPI;
 
@@ -161,11 +163,19 @@ namespace Levitator.SE.Network
 			return Player = PlayerCache.GetPlayer(RemoteId);			
 		}
 
-        public static implicit operator ulong (Destination dest){ return dest.RemoteId; }
+		//This would have been extremely obscure to track down without midspace's code for reference
+		public bool IsAdmin
+		{
+			get{ return Midspace.IsAdmin(GetPlayer()); }
+		}		
+
+		public static implicit operator ulong (Destination dest){ return dest.RemoteId; }
         public static implicit operator Destination(ulong id){ return new Destination(id); }
 
 		public static Destination Server() { return new Destination(MyAPIGateway.Multiplayer.ServerId); }
 		public static Destination Local() { return new Destination(MyAPIGateway.Multiplayer.MyId); }
+
+		public override string ToString(){ return RemoteId.ToString(); }
 	}
 
     public class Connection : IDisposable

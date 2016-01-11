@@ -14,7 +14,7 @@
 using Sandbox.ModAPI;
 using Levitator.SE.Modding;
 using Levitator.SE.Network;
-using Scripts.Modding.Modules.CommonServer;
+using Levitator.SE.Modding.Modules.CommonServer;
 using Levitator.SE.LevitatorMod.Modules;
 
 namespace Levitator.SE.LevitatorMod
@@ -27,8 +27,8 @@ namespace Levitator.SE.LevitatorMod
 			Mod.Log.Log("MyId: " + MyAPIGateway.Multiplayer.MyId + " ServerID: " + MyAPIGateway.Multiplayer.ServerId, false);
 
 			Init();
-			RegisterModule(new CommonServer(this));
-			RegisterModule(new NHBCServer(this));
+			RegisterModule(NHBCServer.Name, NHBCServer.New);
+			LoadModule(CommonServer.Name);	
 		}
 
 		public override void Dispose()

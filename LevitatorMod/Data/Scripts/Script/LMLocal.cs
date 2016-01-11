@@ -10,12 +10,15 @@
 *
 */
 
+using Levitator.SE.LevitatorMod.Modules;
+using Levitator.SE.Modding.Modules.CommonLocal;
 using Levitator.SE.Modding;
+
 
 namespace Levitator.SE.LevitatorMod
 {
 	class LMLocal : LocalInputComponent
 	{
-		public LMLocal(LevitatorMod mod) : base(mod) { RegisterModule(new Modules.NHBCLocal(this)); }
+		public LMLocal(LevitatorMod mod) : base(mod) {	RegisterModule(NHBCLocal.Name, NHBCLocal.New);	}
 	}
 }

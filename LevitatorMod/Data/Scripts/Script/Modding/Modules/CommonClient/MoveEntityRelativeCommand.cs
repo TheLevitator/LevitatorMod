@@ -99,7 +99,7 @@ namespace Scripts.Modding.Modules.CommonClient
 		{			
 			var msg = new MoveEntityRelativeCommand(ent, target, pos);
 			msg.DeferredRun();
-			server.EndPoint.Broadcast(msg, true);
+			server.Endpoint.Broadcast(msg, true);
 		}
 
 		//Consume on client

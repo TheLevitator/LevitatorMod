@@ -10,30 +10,21 @@
 * V1.00
 *
 */
-
-using Levitator.SE.Modding;
-using Levitator.SE.Network;
-using Levitator.SE.Serialization;
-using Levitator.SE.Utility;
-using System;
-
-namespace Scripts.Modding.Modules.CommonServer
+namespace Levitator.SE.Modding.Modules.CommonServer
 {
 	public class CommonServer : ModModule
 	{
+		public const string Name = "LevitatorMod";
 		public CommonServer(ServerComponent component) : base(component) { }
+		public static CommonServer New(ModComponent component) { return new CommonServer((ServerComponent)component); }
 
 		public override CommandRegistry GetCommands()
 		{
-			return new CommandRegistry() { { UserCommand.ClassId, HandleUserCommand } };
-		}
-
-		private void HandleUserCommand(Connection conn, ObjectParser parser)
-		{
-			var cmd = new UserCommand(parser);
-			string name;
-			if (!Component.DispatchCommand(conn, new StringPos(cmd.Text), out name))
-				Log.Log("", new Exception("Received unrecognized chat command: " + name));
-		}
+			return new CommandRegistry() {
+				{ UserCommand.ClassId, new Stateless(this, UserCommand.HandleUserCommand).Handler },
+				{ LoadModuleCommand.ClassId, new Stateless(this, LoadModuleCommand.HandleOnServer).Handler },
+				{ UnloadModuleCommand.ClassId, new Stateless(this, UnloadModuleCommand.HandleOnServer).Handler }
+			};
+		}		
 	}
 }

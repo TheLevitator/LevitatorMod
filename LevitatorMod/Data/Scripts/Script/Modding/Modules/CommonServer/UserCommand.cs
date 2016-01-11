@@ -14,9 +14,12 @@
 */
 
 using Levitator.SE.Modding;
+using Levitator.SE.Network;
 using Levitator.SE.Serialization;
+using Levitator.SE.Utility;
+using System;
 
-namespace Scripts.Modding.Modules.CommonServer
+namespace Levitator.SE.Modding.Modules.CommonServer
 {
 	public class UserCommand : Command
 	{
@@ -31,6 +34,14 @@ namespace Scripts.Modding.Modules.CommonServer
 		{
 			base.Serialize(ser);
 			ser.Write(Text);
+		}
+
+		public static void HandleUserCommand(ModModule module, Connection conn, ObjectParser parser)
+		{
+			var cmd = new UserCommand(parser);
+			string name;
+			if (!module.Component.DispatchCommand(conn, new StringPos(cmd.Text), out name))
+				module.Log.Log("", new Exception("Received unrecognized chat command: " + name));
 		}
 	}
 }

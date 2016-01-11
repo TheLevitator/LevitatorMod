@@ -16,44 +16,118 @@
 using Levitator.SE.Network;
 using Levitator.SE.Serialization;
 using Levitator.SE.Utility;
+using Scripts.Serialization;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Levitator.SE.Modding
 {
+	class ModuleException : Exception { public ModuleException(string message) : base(message) { } }
+	class ModuleUnknown : ModuleException
+	{
+		public ModuleUnknown(string name) : base("'" + name + "' is not a valid module") {}
+	}
+
+	class ModuleDuplicate : ModuleException
+	{
+		public ModuleDuplicate(string name) : base("'" + name + "' is already loaded") {}
+	}
+
+	class ModuleNotLoaded : ModuleException
+	{
+		public ModuleNotLoaded(string name) : base("'" + name + "' is not loaded") {}
+	}
+
+	public class ModuleRegistry
+	{
+		public delegate ModModule ModuleConstructor(ModComponent component);
+		private readonly Dictionary<string, ModModule> Loaded = new Dictionary<string, ModModule>();
+		private readonly Dictionary<string, ModuleConstructor> Registered = new Dictionary<string, ModuleConstructor>();
+		private ModComponent ModComponent;
+
+		public ModuleRegistry(ModComponent component) { ModComponent = component; }
+
+		public void Register(string name, ModuleConstructor construct){ Registered.Add(name, construct); }
+		public ModModule Load(string name){
+			ModModule existing;
+			ModuleConstructor constructor;
+
+			//Currently no duplicate modules
+			Loaded.TryGetValue(name, out existing);
+			if (null != existing) throw new ModuleDuplicate(name);
+
+			Registered.TryGetValue(name, out constructor);
+			if (null == constructor) throw new ModuleUnknown(name);
+			else
+			{
+				var module = constructor(ModComponent);
+				Loaded.Add(name, module);
+				return module;
+			}
+		}
+
+		//Be sure that the module is loaded before calling this
+		public void Unload(string name) {
+			ModModule module = Loaded[name];									
+			Loaded.Remove(name);
+			module.Dispose();
+		}
+
+		public ModModule Get(string name) {
+			ModModule result;
+			Loaded.TryGetValue(name, out result);
+			return result;
+		}
+
+		public IEnumerable<ModModule> LoadedModules { get { return Loaded.Values; } }
+		public IEnumerable<string> LoadedNames { get { return Loaded.Keys; } }
+		public IEnumerable<string> RegisteredNames { get { return Registered.Keys; } }
+	}
+
 	//Stuff common to server and client
 	public class ModComponent : IDisposable
 	{
-		private List<ModModule> Modules = new List<ModModule>();
-		private CommandRegistry Commands = new CommandRegistry();
-		private HashSet<ModModule> ToUpdate = new HashSet<ModModule>();
+		protected readonly ModuleRegistry Modules;
+		private readonly CommandRegistry Commands = new CommandRegistry();
+		private readonly HashSet<ModModule> ToUpdate = new HashSet<ModModule>();
 		public readonly ModBase Mod;
 
-		protected ModComponent(ModBase mod) { Mod = mod; }
+		protected ModComponent(ModBase mod) {
+			Mod = mod;
+			Modules = new ModuleRegistry(this);
+		}
 
-		public virtual void Dispose() { while (Modules.Count > 0) { Modules[0].Dispose(); } }
-		//public virtual void LoadData() { foreach (var m in Modules) { m.LoadData(); } }
-		public virtual void LoadData() { Util.ForEach(Modules, m => m.LoadData()); }
-		//public virtual void SaveData() { foreach (var m in Modules) { m.SaveData(); } }
-		public virtual void SaveData() { Util.ForEach(Modules, m => m.SaveData() ); }
-		//public virtual void Update() { foreach (var m in Modules) { m.Update(); } }
-		public virtual void Update() { Util.ForEach(Modules, m => m.Update() ); }
+		public virtual void Dispose() {
+			string name;
+			while (null != (name = Modules.LoadedNames.FirstOrDefault()))
+			{
+				UnloadModule(name);
+			}						
+		}
+		public virtual void LoadData() { Util.ForEach(Modules.LoadedModules, m => m.LoadData()); }
+		public virtual void SaveData() { Util.ForEach(Modules.LoadedModules, m => m.SaveData()); }
+		public virtual void Update() { Util.ForEach(Modules.LoadedModules, m => m.Update()); }
 
-		public void RegisterModule(ModModule module)
-		{
-			Modules.Add(module);
-			//foreach (var command in module.GetCommands()) { Commands.Add(command); }
+		public void RegisterModule(string name, ModuleRegistry.ModuleConstructor constructor){ Modules.Register(name, constructor);	}
+
+		public virtual ModModule LoadModule(string name) {			
+			var module = Modules.Load(name);			
 			Util.ForEach(module.GetCommands(), Commands.Add);
+			return module;				
+		}
+
+		public virtual void UnloadModule(string name) {			
+			var module = Modules.Get(name);
+
+			if (null == module) throw new ModuleNotLoaded(name);
+			else
+			{				
+				Util.ForEach(module.GetCommands().Keys, key => Commands.Remove(key));
+				Modules.Unload(name);				
+			}
 		}
 		
-		public void UnregisterModule(ModModule module)
-		{
-			//foreach (var key in module.GetCommands().Keys) { Commands.Remove(key); }
-			Util.ForEach(module.GetCommands().Keys, key => Commands.Remove(key));
-			Modules.Remove(module);
-			ToUpdate.Remove(module);
-		}
-
 		public void RegisterForUpdates(ModModule module) { ToUpdate.Add(module); }
 		public void UnregisterForUpdates(ModModule module) { ToUpdate.Remove(module); }
 
@@ -71,6 +145,9 @@ namespace Levitator.SE.Modding
 			else
 				return false;
 		}
+
+		//Convenience function
+		public Connection ServerConnection { get { return Mod.ClientComponent.ServerConnection; } }
 	}
 
 	//Stubs for the client instance

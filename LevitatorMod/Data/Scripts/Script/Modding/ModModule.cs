@@ -17,22 +17,23 @@ using System;
 using System.Collections.Generic;
 using Levitator.SE.Network;
 using Levitator.SE.Serialization;
-using Scripts.Modding.Modules.CommonServer;
+using Levitator.SE.Modding.Modules.CommonServer;
 
 namespace Levitator.SE.Modding
 {
 	public abstract class ModModule : IDisposable
 	{
 		private static readonly CommandRegistry NullCommandList = new CommandRegistry();
+		private static readonly List<string> NullStringList = new List<string>(0);
 		public readonly ModComponent Component;
 		protected ModModule(ModComponent comp) { Component = comp; }
-
 
 		public virtual void LoadData() { }		
 		public virtual void SaveData() { }
 		public virtual CommandRegistry GetCommands() { return NullCommandList; }
+		public virtual List<string> GetClientDependencies(){ return NullStringList; }
 		public virtual void Update() { }
-		public virtual void Dispose() { Component.UnregisterModule(this); }
+		public virtual void Dispose(){ SaveData(); }
 
 		//
 		//Convenience functions for use within module definitions
