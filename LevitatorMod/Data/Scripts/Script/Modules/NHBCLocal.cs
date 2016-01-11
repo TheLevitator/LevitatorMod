@@ -10,7 +10,9 @@ namespace Levitator.SE.LevitatorMod.Modules
 {
 	public class NHBCLocal : ModModule
 	{
+		public const string Name = "NHBC";
 		public NHBCLocal(LocalInputComponent client) : base(client) { }
+		public static NHBCLocal New(ModComponent component) { return new NHBCLocal((LocalInputComponent)component); }
 
 		public override CommandRegistry GetCommands()
 		{
@@ -47,7 +49,7 @@ namespace Levitator.SE.LevitatorMod.Modules
 				else return true;
 			});
 
-			if(notFound) NotificationCommand.Notice(NHBCServer.RangeError);
-		}		
+			if (notFound) NotificationCommand.Notice(NHBCServer.RangeError);
+		}
 	}
 }

@@ -62,7 +62,7 @@ namespace Scripts.Modding.Modules.CommonClient
 		{
 			var msg = new MoveEntityWithVelocitiesCommand(ent, pos, linear, angular);
 			msg.DeferredRun();
-			server.EndPoint.Broadcast(msg, true);
+			server.Endpoint.Broadcast(msg, true);
 		}
 
 		//Consume on client

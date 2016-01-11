@@ -16,6 +16,9 @@ using Levitator.SE.Utility;
 using Sandbox.Common;
 using Sandbox.ModAPI;
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using VRage.ModAPI;
 
 namespace Levitator.SE.Modding
@@ -23,7 +26,7 @@ namespace Levitator.SE.Modding
 	//The attribute is not inheritable, so add it to your subclass
 	//[MySessionComponentDescriptor(MyUpdateOrder.X)]
 	public abstract class ModBase : MySessionComponentBase, IDisposable
-	{
+	{		
 		protected bool Initialized;
 		protected bool Fatal;
 		
@@ -50,6 +53,7 @@ namespace Levitator.SE.Modding
 			protected set { mLocalInputComponent = value; }
 		}
 
+		public virtual string ModuleConfigPath { get { return "Modules"; } }
 		public abstract ushort MessageId { get; }
 
 		//Implement these to simplify initialization, shutdown, loading, and the priodic updates
@@ -68,9 +72,11 @@ namespace Levitator.SE.Modding
 		//I tried to improve upon this by including the SteamID, but a dedicated server's SteamID is variable between sessions!
 		public static string QualifyFilename(string name)
 		{
-			string tmp = name + "." + MyAPIGateway.Session.Name;
+			//string tmp = name + "." + MyAPIGateway.Session.Name;
+			string tmp = name + "." + Path.GetFileNameWithoutExtension(MyAPIGateway.Session.CurrentPath);
+
 			//Spaces cause problems for some reason. Replace them with underscores. Expand existing underscores to avoid name collisions.
-            tmp = tmp.Replace("_", "__");
+			tmp = tmp.Replace("_", "__");
 			tmp = tmp.Replace(' ', '_');
 			tmp = tmp.Replace(":", "");	//Same thing the game does when naming saves
 			return tmp;
@@ -88,25 +94,26 @@ namespace Levitator.SE.Modding
 				Log.Init();
 				DeferredTasks = new DeferredTaskQueue(Log);
 				if (!Initialize()) return;
+							
+				if (MyAPIGateway.Multiplayer.IsServer && null == MyAPIGateway.Session.Player)
+				{
+					LocalInputComponent = new NullModComponent(this);
+					ClientComponent = new NullClientComponent(this);
+				}
+				else
+				{
+					LocalInputComponent = CreateLocalInputComponent();
+					ClientComponent = CreateClientComponent();					
+				}
 
 				if (MyAPIGateway.Multiplayer.IsServer)
 					ServerComponent = CreateServerComponent();
 				else
 					ServerComponent = new NullServerComponent(this);
-				
-				if (MyAPIGateway.Multiplayer.IsServer && null == MyAPIGateway.Session.Player)
-				{
-					ClientComponent = new NullClientComponent(this);
-					LocalInputComponent = new NullModComponent(this);
-				}
-				else
-				{
-					ClientComponent = CreateClientComponent();
-					LocalInputComponent = CreateLocalInputComponent();
-				}
 
 				Initialized = true;
-				LoadData();				
+				LoadData();			//We may have missed a LoadData() before the game was initialized, so do it here
+									//Better to load twice than to forget
 			}
 			catch (Exception x)
 			{
@@ -120,9 +127,10 @@ namespace Levitator.SE.Modding
 		private void BaseShutdown()
 		{
 			Shutdown();
-			Util.DisposeIfSet(ref mLocalInputComponent);
-			Util.DisposeIfSet(ref mClientComponent);
 			Util.DisposeIfSet(ref mServerComponent);
+			Util.DisposeIfSet(ref mClientComponent);
+			Util.DisposeIfSet(ref mLocalInputComponent);			
+			
 			DeferredTasks = null;
 			if (Log != null) Log.Dispose();
 			Initialized = false;			
@@ -174,7 +182,7 @@ namespace Levitator.SE.Modding
 			try
 			{
 				if (Initialized)
-				{
+				{				
 					SaveDataDefinitely();
 					ServerComponent.SaveData();
 					ClientComponent.SaveData();

@@ -11,18 +11,20 @@
 *
 */
 
+using Levitator.SE.LevitatorMod.Modules;
 using Levitator.SE.Modding;
 using Scripts.Modding.Modules.CommonClient;
 
 namespace Levitator.SE.LevitatorMod
 {
 	class LMClient : ClientComponent
-	{
+	{		
 		public LMClient(LevitatorMod mod) : base(mod)
 		{
 			Mod.Log.Log("Client starting", false);
-			RegisterModule(new CommonClient(this));
 			Init();
+			
+			RegisterModule(NHBCClient.Name, NHBCClient.New);				
 		}
 
 		public override void Dispose()

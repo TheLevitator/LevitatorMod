@@ -64,7 +64,7 @@ namespace Scripts.Modding.Modules.CommonClient
 		{
 			var msg = new MoveEntityCommand(ent, pos);
 			msg.DeferredRun(); //Not really deferred on the server, since it should always succeed
-			server.EndPoint.Broadcast(msg, true);
+			server.Endpoint.Broadcast(msg, true);
 		}
 
 		//Consume on client

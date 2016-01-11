@@ -96,7 +96,17 @@ namespace Levitator.SE.Modding
             bool Display = null != Writer;            
             Log(prefix + ": " + x, Display, MyFontEnum.ErrorMessageBoxText);
         }
+		
+		public static string DestinationString(Network.Destination dest){
 
+			var player = dest.GetPlayer();
+
+			if (null == player)
+				return dest.ToString();
+			else
+				return string.Format("{0}/{1}", player.DisplayName, dest.ToString());			
+		}
+				
         private void Flush()
         {
 			try {

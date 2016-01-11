@@ -12,7 +12,6 @@
 using System;
 using System.Collections.Generic;
 using Sandbox.ModAPI;
-using System.IO;
 using VRage.ModAPI;
 using Sandbox.ModAPI.Ingame;
 using VRageMath;
@@ -23,30 +22,14 @@ using Levitator.SE.Utility;
 using Levitator.SE.Serialization;
 using Levitator.SE.Network;
 using Scripts.Modding.Modules.CommonClient;
-using Sandbox.Common.ObjectBuilders.Definitions;
 using Sandbox.Common.ObjectBuilders;
 
 namespace Levitator.SE.LevitatorMod.Modules
 {
-	public class SetHomeMessage : Command
-	{
-		public const string Id = "home";
-		public override string GetId() { return Id; }
-		public EntityRef Home;
-
-		public SetHomeMessage(IMyMedicalRoom home) { Home.Ref = home; }
-		public SetHomeMessage(ObjectParser parser) { Home = parser.Parse(EntityRef.New); }
-
-		public override void Serialize(ObjectSerializer ser)
-		{
-			base.Serialize(ser);
-			ser.Write(Home);
-		}
-	}
-
 	public class NHBCServer : ModModule
 	{
 		//Hard config
+		public const string Name = "NHBC";
 		public const string HomeDataPath = "HomeData";			//File name to store users' home data
 		public const float HomeRange = 2;                       //Max distance in m to a medical room at which user can set home
 		public const int GraceLimit = 5;						//Maximum number of times Herr Noob may spawn freely before NHBC rules come into effect
@@ -54,8 +37,8 @@ namespace Levitator.SE.LevitatorMod.Modules
 		//Error messages
 		public static readonly string RangeError = "You must be within " + HomeRange + "m of an accessible Medical Room";
 		public static readonly string CharacterError = "You must be on foot to set your spawn";
-		
-		bool DataFileValid;
+
+		ConfigFile<Util.SerializableDictionaryWrapper<ulong, PlayerData>> HomeDataFile;
 		HomeDictionary HomeData;
 		Singleton<TopLevelEntityTracker<IMyCharacter>>.Ref CharacterTracker;
 		EntityTrackerSink<IMyCharacter> Characters;
@@ -78,7 +61,7 @@ namespace Levitator.SE.LevitatorMod.Modules
 
 		public NHBCServer(ModComponent mc) : base(mc)
 		{			
-			Log.Log("NHBC Module Created", false);
+			Log.Log("NHBC Module starting...", false);
 
 			CharacterTracker = Singleton.Get<TopLevelEntityTracker<IMyCharacter>>(TopLevelEntityTracker<IMyCharacter>.New);
             Characters = new EntityTrackerSink<IMyCharacter>(CharacterTracker.Instance, OnCharacterAdded, OnCharacterRemoved);
@@ -86,8 +69,11 @@ namespace Levitator.SE.LevitatorMod.Modules
 			mc.RegisterForUpdates(this);
         }
 
+		public static NHBCServer New(ModComponent component) { return new NHBCServer(component); }
+
 		public override void Dispose()
-		{						
+		{
+			Log.Log("NHBC Module exiting...");	
 			Util.DisposeIfSet(ref Characters);
 			Util.DisposeIfSet(ref CharacterTracker);			
 			if (null != HomeData)
@@ -97,14 +83,30 @@ namespace Levitator.SE.LevitatorMod.Modules
 			}
 			base.Dispose();
 		}
-		
+
+		public override CommandRegistry GetCommands()
+		{
+			return new CommandRegistry()
+			{
+				{SetHomeMessage.Id, HandleHomeCommand},			
+			};
+		}
+
+		public override List<string> GetClientDependencies()
+		{
+			return new List<string>()
+			{
+				NHBCClient.Name
+			};
+		}
+
 		//Dead characters being removed have no controlling player
 		//private void OnCharacterRemoved(IMyCharacter obj){}
-	
+
 		//It's a hard life...
 		private void HandleHomeless(IMyPlayer player, IMyCharacter character, string detail)
 		{
-			MissionScreenCommand.Show(Component.Mod.ServerComponent.EndPoint[player], "This is not a UFO suicide cult", detail + "\n" +
+			MissionScreenCommand.Show(Component.Mod.ServerComponent.Endpoint[player], "This is not a UFO suicide cult", detail + "\n" +
 				"You may travel to a friendly, active medical room and select it as your home by typing '/home' in chat.", "Objective: ",
 				"find a Medical Room and type '/home'");
 
@@ -127,9 +129,9 @@ namespace Levitator.SE.LevitatorMod.Modules
 			if (null == Component) Log.Log("COMPONENT NULL");
 			if (null == Component.Mod) Log.Log("MOD NULL");
 			if (null == Component.Mod.ServerComponent) Log.Log("SERVER NULL");
-			if (null == Component.Mod.ServerComponent.EndPoint) Log.Log("ENDPOINT NULL");
+			if (null == Component.Mod.ServerComponent.Endpoint) Log.Log("ENDPOINT NULL");
 
-			MissionScreenCommand.Show(Component.Mod.ServerComponent.EndPoint[player], "This is not a UFO suicide cult",
+			MissionScreenCommand.Show(Component.Mod.ServerComponent.Endpoint[player], "This is not a UFO suicide cult",
 					"From now on, whenever you spawn on foot you will always start at your home Medical Room unless you choose a spawn ship instead. " +
 					"This is to prevent people from hitchhiking across the galaxy by suiciding. You must travel to a Medical Room and type '/home' in chat to set your home spawn.\n\n" +
 					"Your remaining grace period in spawns is: " + (GraceLimit - data.Graces).ToString(), "Objective: ", "Go type '/home' near a medical room!");			
@@ -186,7 +188,7 @@ namespace Levitator.SE.LevitatorMod.Modules
 				//MoveEntityRelativeCommand.MoveEntityRelative(Component.Mod.ServerComponent, charent, room,
 				//	new MyPositionAndOrientation(pd.Position, pd.Forward, pd.Up).GetMatrix());
 					
-				NotificationCommand.Notice(Component.Mod.ServerComponent.EndPoint[player], "Spawned at your home medbay");
+				NotificationCommand.Notice(Component.Mod.ServerComponent.Endpoint[player], "Spawned at your home medbay");
 				pd.Graces = GraceLimit;	//Choose wisely
 			}
 			else
@@ -256,81 +258,45 @@ namespace Levitator.SE.LevitatorMod.Modules
 
 		private void OnCharacterRemoved(IMyCharacter character){ Carcasses.Remove(character); }
 
-		public override CommandRegistry GetCommands()
-		{
-			return new CommandRegistry()
-			{
-				{SetHomeMessage.Id, HandleHomeCommand}
-			};
-		}
-
 		public override void LoadData()
 		{
-			var qualifiedPath = ModBase.QualifyFilename(HomeDataPath);
-			Log.Log(qualifiedPath + " loading", false);
-			HomeData = null;
-			DataFileValid = true;
-			if (MyAPIGateway.Utilities.FileExistsInLocalStorage(qualifiedPath, GetType()))
+			try
 			{
-				try
-				{
-					LoadPlayerData();
-				}
-				catch (Exception x)
-				{
-					DataFileValid = false; //Remember not to save over a corrupt state file that the admin might want to repair
-					HomeData = null;
-					Log.Log(HomeDataPath + " could not be loaded. It will not be saved", x);
-				}
+				LoadPlayerData();
 			}
-			else
+			catch (Exception x)
 			{
-				Log.Log("No player home data found. Reset.", false);
+				Log.Log(string.Format("'{0}' could not be loaded. It will not be saved", HomeDataFile.QualifiedName), x);
 			}
 
 			if (null == HomeData)
-				HomeData = new HomeDictionary();			
+			{
+				HomeData = new HomeDictionary();
+				Log.Log("No player home data found. Reset.");
+			}					
 		}
 
 		public override void SaveData()
 		{
-			if (null != HomeData && DataFileValid) //sometimes saves before loading?
+			if (null != HomeData) //sometimes saves before loading?
 				SavePlayerData();			
 		}
 
 		private void LoadPlayerData()
 		{
-			TextReader tr = MyAPIGateway.Utilities.ReadFileInLocalStorage(ModBase.QualifyFilename(HomeDataPath), GetType());
+			HomeData = null;
+			Log.Log("Loading home data");
+			HomeDataFile = new ConfigFile<Util.SerializableDictionaryWrapper<ulong, PlayerData>>(HomeDataPath, GetType());
 
-			try
-			{
-				HomeData = new HomeDictionary( MyAPIGateway.Utilities.SerializeFromXML<Util.SerializableDictionaryWrapper<ulong, PlayerData>>(tr.ReadToEnd()).GetDictionary() );
-			}
-			finally
-			{
-				tr.Dispose();
-			}
+			if(null != HomeDataFile.Data)
+				HomeData = new HomeDictionary(HomeDataFile.Data.GetDictionary());			
 		}
 
 		private void SavePlayerData()
-		{
-			string file = ModBase.QualifyFilename(HomeDataPath);
-			Log.Log(file + " saving.", false);
-			string newData = MyAPIGateway.Utilities.SerializeToXML(new Util.SerializableDictionaryWrapper<ulong, PlayerData>(HomeData));
-
-			//Shame there are no file rename or copy functions
-			if (MyAPIGateway.Utilities.FileExistsInLocalStorage(file, GetType()))
-				MyAPIGateway.Utilities.DeleteFileInLocalStorage(file, GetType());
-			TextWriter tw = MyAPIGateway.Utilities.WriteFileInLocalStorage(file, GetType());
-
-			try
-			{
-				tw.Write(newData);
-			}
-			finally
-			{
-				tw.Dispose();
-			}
+		{			
+			Log.Log(HomeDataFile.QualifiedName + " saving.", false);
+			HomeDataFile.Data = new Util.SerializableDictionaryWrapper<ulong, PlayerData>(HomeData);
+			HomeDataFile.Save();		
 		}
 
 		private void HandleHomeCommand(Connection conn, ObjectParser parser)
